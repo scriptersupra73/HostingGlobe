@@ -307,6 +307,29 @@
             100% { background-color: transparent; }
         }
 
+        /* Notification */
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            border-left: 4px solid #00d4ff;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+            max-width: 350px;
+        }
+
+        .notification.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
         /* Globe marker styles */
         .marker-label {
             position: absolute;
@@ -395,13 +418,17 @@
         </div>
     </div>
 
+    <div class="notification" id="notification">
+        <div id="notification-content">IP details detected!</div>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         let scene, camera, renderer, earth, marker, markerLabel;
         let pulseInterval;
         let currentIPData = null;
         let detectedIPs = new Set();
-        let ipDetectionInterval;
+        let notificationTimeout;
 
         function initGlobe() {
             scene = new THREE.Scene();
@@ -578,6 +605,7 @@
                         !ip.includes(':') && ip.split('.').length === 4) {
                         ips.push(ip);
                         addIPToList(ip, 'local');
+                        showNotification(`Local IP detected: ${ip}`, 'local');
                     }
                 };
 
@@ -611,6 +639,19 @@
             }, 2000);
         }
 
+        function showNotification(message, type) {
+            const notification = document.getElementById('notification');
+            const content = document.getElementById('notification-content');
+            
+            content.innerHTML = message;
+            notification.classList.add('show');
+            
+            clearTimeout(notificationTimeout);
+            notificationTimeout = setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
         async function fetchIPInfo() {
             try {
                 // First try WebRTC leak detection to get local IP
@@ -622,6 +663,7 @@
                 
                 // Add public IP to list
                 addIPToList(ipData.ip, 'public');
+                showNotification(`Public IP detected: ${ipData.ip}`, 'public');
                 
                 // Create demo data based on detected IP
                 const data = {
@@ -666,6 +708,7 @@
                 };
                 
                 addIPToList(demoData.ip, 'public');
+                showNotification(`Demo IP detected: ${demoData.ip}`, 'demo');
                 currentIPData = demoData;
                 
                 displayIPInfo(demoData, 'unknown', '📋 Demo Mode', 'status-unknown', []);
@@ -767,20 +810,9 @@
             }, 30000); // Every 30 seconds
         }
 
-        // Start continuous IP detection
-        function startContinuousIPDetection() {
-            // Initial detection
-            fetchIPInfo();
-            
-            // Continuous detection every 30 seconds
-            ipDetectionInterval = setInterval(() => {
-                fetchIPInfo();
-            }, 30000);
-        }
-
         initGlobe();
         startUptimeMonitoring();
-        startContinuousIPDetection();
+        fetchIPInfo(); // Initial detection
     </script>
 </body>
 </html>
