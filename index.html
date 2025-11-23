@@ -17,7 +17,6 @@
             color: #fff;
             overflow-x: hidden;
             min-height: 100vh;
-            cursor: pointer;
         }
         
         #container {
@@ -261,6 +260,53 @@
             50% { opacity: 0.3; }
         }
 
+        /* Live IP list */
+        .live-ip-list {
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .live-ip-item {
+            padding: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .live-ip-item:last-child {
+            border-bottom: none;
+        }
+
+        .ip-type {
+            font-size: 12px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            background: rgba(0, 212, 255, 0.2);
+        }
+
+        .public-ip {
+            color: #00d4ff;
+        }
+
+        .local-ip {
+            color: #ff9900;
+        }
+
+        .new-ip {
+            animation: highlight 2s;
+        }
+
+        @keyframes highlight {
+            0% { background-color: rgba(0, 212, 255, 0.5); }
+            100% { background-color: transparent; }
+        }
+
         /* Globe marker styles */
         .marker-label {
             position: absolute;
@@ -305,28 +351,6 @@
             }
         }
 
-        /* Notification */
-        .notification {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            border-left: 4px solid #00d4ff;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-            transform: translateY(100px);
-            opacity: 0;
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
-
-        .notification.show {
-            transform: translateY(0);
-            opacity: 1;
-        }
-
         @media (max-width: 768px) {
             #container {
                 flex-direction: column;
@@ -364,12 +388,11 @@
                     <div>Detecting your connection...</div>
                 </div>
             </div>
+            <div class="live-ip-list" id="live-ip-list">
+                <div style="text-align: center; padding: 10px; color: #888;">Live IP Detection Stream</div>
+            </div>
             <button class="btn-refresh" onclick="refreshData()">↻ Refresh Detection</button>
         </div>
-    </div>
-
-    <div class="notification" id="notification">
-        IP details revealed! Check the dashboard for full information.
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -377,7 +400,8 @@
         let scene, camera, renderer, earth, marker, markerLabel;
         let pulseInterval;
         let currentIPData = null;
-        let notificationTimeout;
+        let detectedIPs = new Set();
+        let ipDetectionInterval;
 
         function initGlobe() {
             scene = new THREE.Scene();
@@ -553,6 +577,7 @@
                     if (ip && ip !== '0.0.0.0' && !ips.includes(ip) && 
                         !ip.includes(':') && ip.split('.').length === 4) {
                         ips.push(ip);
+                        addIPToList(ip, 'local');
                     }
                 };
 
@@ -563,6 +588,29 @@
             });
         }
 
+        function addIPToList(ip, type) {
+            if (detectedIPs.has(ip)) return;
+            
+            detectedIPs.add(ip);
+            
+            const ipList = document.getElementById('live-ip-list');
+            const ipItem = document.createElement('div');
+            ipItem.className = `live-ip-item new-ip`;
+            
+            ipItem.innerHTML = `
+                <span class="${type}-ip">${ip}</span>
+                <span class="ip-type">${type === 'public' ? 'Public' : 'Local'}</span>
+            `;
+            
+            // Insert after the header
+            ipList.insertBefore(ipItem, ipList.firstChild.nextSibling);
+            
+            // Remove new-ip class after animation
+            setTimeout(() => {
+                ipItem.classList.remove('new-ip');
+            }, 2000);
+        }
+
         async function fetchIPInfo() {
             try {
                 // First try WebRTC leak detection to get local IP
@@ -571,6 +619,9 @@
                 // Try the ipify API for public IP
                 const response = await fetch('https://api.ipify.org?format=json');
                 const ipData = await response.json();
+                
+                // Add public IP to list
+                addIPToList(ipData.ip, 'public');
                 
                 // Create demo data based on detected IP
                 const data = {
@@ -614,6 +665,7 @@
                     longitude: -122.4194
                 };
                 
+                addIPToList(demoData.ip, 'public');
                 currentIPData = demoData;
                 
                 displayIPInfo(demoData, 'unknown', '📋 Demo Mode', 'status-unknown', []);
@@ -690,23 +742,6 @@
             fetchIPInfo();
         }
 
-        function showNotification() {
-            const notification = document.getElementById('notification');
-            notification.classList.add('show');
-            
-            clearTimeout(notificationTimeout);
-            notificationTimeout = setTimeout(() => {
-                notification.classList.remove('show');
-            }, 3000);
-        }
-
-        // Auto-reveal IP details on any click
-        document.addEventListener('click', function() {
-            if (currentIPData) {
-                showNotification();
-            }
-        });
-
         window.addEventListener('resize', () => {
             const container = document.getElementById('globe-container');
             const width = container.clientWidth;
@@ -732,9 +767,20 @@
             }, 30000); // Every 30 seconds
         }
 
+        // Start continuous IP detection
+        function startContinuousIPDetection() {
+            // Initial detection
+            fetchIPInfo();
+            
+            // Continuous detection every 30 seconds
+            ipDetectionInterval = setInterval(() => {
+                fetchIPInfo();
+            }, 30000);
+        }
+
         initGlobe();
-        fetchIPInfo();
         startUptimeMonitoring();
+        startContinuousIPDetection();
     </script>
 </body>
 </html>
